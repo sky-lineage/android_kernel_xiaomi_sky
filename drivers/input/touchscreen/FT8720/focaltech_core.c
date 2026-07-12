@@ -2579,6 +2579,15 @@ static int fts_set_cur_value(int mode, int value)
 				FTS_INFO("%s,unknow value\n", __func__);
 			}
 		}
+		else if (mode == Touch_Doubletap_Mode) {
+			FTS_INFO("fts_set_cur_value mode = %d , value = %d\n", mode, value);
+
+			if (fts_data && fts_data->input_dev) {
+				input_event(fts_data->input_dev, EV_SYN, SYN_CONFIG, value ? 5 : 4);
+				input_sync(fts_data->input_dev);
+			}
+			xiaomi_touch_interfaces.touch_mode[mode][GET_CUR_VALUE] = value;
+		}
 	} else
 		FTS_INFO("%s,don't support\n", __func__);
 	return 0;
@@ -2628,6 +2637,8 @@ static int fts_get_mode_cur_value(int mode)
 				ret = 3;
 			else
 				ret = 0;
+		} else if (mode == Touch_Doubletap_Mode) {
+			ret = xiaomi_touch_interfaces.touch_mode[mode][GET_CUR_VALUE];
 		} else {
 			ret = 0;
 			FTS_INFO("%s,don't support\n", __func__);

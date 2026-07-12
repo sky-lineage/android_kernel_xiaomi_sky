@@ -1432,10 +1432,18 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 		NVT_ERR("%s, nvt mode is error:%d", __func__, nvt_mode);
 		return -EINVAL;
 	}
+
 	if (nvt_mode == Touch_Doubletap_Mode && ts && nvt_value >= 0) {
 		ts-> db_wakeup = nvt_value;
-		schedule_work(&ts->switch_mode_work);
+
+		if (ts->input_dev && ts->input_dev->event) {
+			ts->input_dev->event(ts->input_dev, EV_SYN, SYN_CONFIG, nvt_value ? 5 : 4);
+		}
+		xiaomi_touch_interfaces.touch_mode[nvt_mode][SET_CUR_VALUE] = nvt_value;
+		xiaomi_touch_interfaces.touch_mode[nvt_mode][GET_CUR_VALUE] = nvt_value;
+		return 0;
 	}
+
 	xiaomi_touch_interfaces.touch_mode[nvt_mode][SET_CUR_VALUE] = nvt_value;
 	if (xiaomi_touch_interfaces.touch_mode[nvt_mode][SET_CUR_VALUE] >
 			xiaomi_touch_interfaces.touch_mode[nvt_mode][GET_MAX_VALUE]) {
