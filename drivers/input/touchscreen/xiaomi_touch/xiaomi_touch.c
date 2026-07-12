@@ -216,8 +216,49 @@ struct device_attribute *attr, const char *buf, size_t count)
 }
 static DEVICE_ATTR(palm_sensor, (0664),
 		   palm_sensor_show, palm_sensor_store);
+
+/* DT2W Sysfs Implementation */
+static ssize_t gesture_double_tap_enabled_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+	int val = 0;
+
+	if (!pdata || !pdata->touch_data)
+		return snprintf(buf, PAGE_SIZE, "%d\n", val);
+
+	/* Fallback logic to support both FTS and NVT getter styles */
+	if (pdata->touch_data->getModeCurValue)
+		val = pdata->touch_data->getModeCurValue(Touch_Doubletap_Mode);
+	else if (pdata->touch_data->getModeValue)
+		val = pdata->touch_data->getModeValue(Touch_Doubletap_Mode, GET_CUR_VALUE);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+
+static ssize_t gesture_double_tap_enabled_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int input;
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (sscanf(buf, "%d", &input) < 0)
+		return -EINVAL;
+
+	if (pdata->touch_data->setModeValue)
+		pdata->touch_data->setModeValue(Touch_Doubletap_Mode, !!input);
+
+	return count;
+}
+static DEVICE_ATTR(gesture_double_tap_enabled, 0664, gesture_double_tap_enabled_show, gesture_double_tap_enabled_store);
+
+static ssize_t gesture_double_tap_state_show(struct device *dev, struct device_attribute *attr, char *buf) { return snprintf(buf, PAGE_SIZE, "0\n"); }
+static DEVICE_ATTR(gesture_double_tap_state, 0444, gesture_double_tap_state_show, NULL);
+
 static struct attribute *touch_attr_group[] = {
 	&dev_attr_palm_sensor.attr,
+	&dev_attr_gesture_double_tap_enabled.attr,
+	&dev_attr_gesture_double_tap_state.attr,
 	NULL,
 };
 static const struct of_device_id xiaomi_touch_of_match[] = {
