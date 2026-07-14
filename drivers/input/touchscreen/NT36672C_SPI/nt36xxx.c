@@ -129,7 +129,7 @@ const uint16_t gesture_key_array[] = {
 	KEY_POWER,  //GESTURE_WORD_C
 	KEY_POWER,  //GESTURE_WORD_W
 	KEY_POWER,  //GESTURE_WORD_V
-	NVT_KEY_DOUBLE_CLICK,  //GESTURE_DOUBLE_CLICK
+	KEY_WAKEUP,  //GESTURE_DOUBLE_CLICK
 	KEY_POWER,  //GESTURE_WORD_Z
 	KEY_POWER,  //GESTURE_WORD_M
 	KEY_POWER,  //GESTURE_WORD_O
@@ -2301,6 +2301,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	//---set input device info.---
 	ts->input_dev->evbit[0] = BIT_MASK(EV_SYN) | BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 	ts->input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
+	__set_bit(KEY_WAKEUP, ts->input_dev->keybit);
 	ts->input_dev->propbit[0] = BIT(INPUT_PROP_DIRECT);
 
 #if MT_PROTOCOL_B
@@ -2808,6 +2809,13 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	msleep(250);
 
+	if (g_priximity_enable) {
+		NVT_LOG("Proximity active. Keeping TS alive but arming IRQ.\n");
+		bTouchIsAwake = 0;
+		nvt_enable_irq_wake(true);
+		return 0;
+	}
+
 #if WAKEUP_GESTURE
 	if (g_gesture_flag == false)
 		nvt_irq_enable(false);
@@ -2994,11 +3002,7 @@ static int nvt_xiaomi_panel_notifier_callback(struct notifier_block *self, unsig
 	if (ts_data) {
 		if (event == XIAOMI_PANEL_EARLY_EVENT_BLANK) {
 			if (evdata->blank == XIAOMI_PANEL_BLANK_POWERDOWN) {
-				if(!g_priximity_enable){
-				NVT_LOG("g_priximity_enable is %d\n",g_priximity_enable);
 				nvt_ts_suspend(&ts->client->dev);
-				//queue_delayed_work(ts->wait_workqueue,&ts->suspend_work,msecs_to_jiffies(0));
-				}
 			}
 		} else if (event == XIAOMI_PANEL_NORMAL_EVENT_BLANK) {
 			if (evdata->blank == XIAOMI_PANEL_BLANK_UNBLANK) {
