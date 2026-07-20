@@ -1425,7 +1425,7 @@ static ssize_t nvt_proximity_switch_proc_write(struct file *filp,const char __us
 	int32_t ret;
 	int32_t tmp;
 	uint8_t proximity_switch;
-	char *tmp_buf;
+	char *tmp_buf = NULL;
 
 	NVT_LOG("++\n");
 

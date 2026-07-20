@@ -1871,7 +1871,7 @@ static ssize_t fts_proximity_switch_proc_write(struct file *filp,const char __us
 	int32_t ret;
 	int32_t tmp;
 	uint8_t proximity_switch;
-	char *tmp_buf;
+	char *tmp_buf = NULL;
 	struct fts_ts_data *ts_data = fts_data;
 	struct input_dev *input_dev = ts_data->input_dev;
 
