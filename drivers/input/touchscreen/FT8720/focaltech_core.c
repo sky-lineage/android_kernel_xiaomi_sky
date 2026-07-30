@@ -2300,6 +2300,7 @@ void fts_enable_irq_wake(bool enable)
 static int fts_ts_suspend(struct device *dev)
 {
     int ret = 0;
+    int prox_wait = 0;
     struct fts_ts_data *ts_data = fts_data;
 
     FTS_FUNC_ENTER();
@@ -2321,7 +2322,15 @@ static int fts_ts_suspend(struct device *dev)
 		fts_data->palm_sensor_switch = false;
 	}
 #endif
-    msleep(250);
+
+    /* Dynamic delay up to 250ms */
+    if (g_priximity_enable) {
+        while (g_priximity_enable && prox_wait < 25) {
+            msleep(10);
+            prox_wait++;
+        }
+    }
+
     fts_esdcheck_suspend(ts_data);
 
     if (g_priximity_enable) {

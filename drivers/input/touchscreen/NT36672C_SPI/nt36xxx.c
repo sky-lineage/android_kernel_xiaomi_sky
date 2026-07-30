@@ -2797,6 +2797,7 @@ return:
 *******************************************************/
 static int32_t nvt_ts_suspend(struct device *dev)
 {
+	int prox_wait = 0;
 	uint8_t buf[4] = {0};
 #if MT_PROTOCOL_B
 	uint32_t i = 0;
@@ -2807,7 +2808,13 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		return 0;
 	}
 
-	msleep(250);
+	/* Dynamic delay up to 250ms */
+	if (g_priximity_enable) {
+		while (g_priximity_enable && prox_wait < 25) {
+			msleep(10);
+			prox_wait++;
+		}
+	}
 
 	if (g_priximity_enable) {
 		NVT_LOG("Proximity active. Keeping TS alive but arming IRQ.\n");
