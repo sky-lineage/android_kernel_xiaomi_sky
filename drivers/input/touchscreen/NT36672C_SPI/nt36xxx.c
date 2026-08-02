@@ -87,6 +87,9 @@ extern int32_t nvt_mp_proc_init(void);
 extern void nvt_mp_proc_deinit(void);
 #endif
 
+static bool nvt_pm_suspended = false;
+static bool nvt_pending_wake = false;
+
 struct nvt_ts_data *ts;
 bool g_gesture_flag;
 #if IS_ENABLED(CONFIG_XIAOMI_TOUCH_NOTIFIER)
@@ -1763,6 +1766,15 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	uint32_t pen_btn2 = 0;
 	uint32_t pen_battery = 0;
 
+	if (nvt_pm_suspended) {
+		NVT_LOG("Deep sleep IRQ deferred to PM resume.\n");
+		disable_irq_nosync(ts->client->irq);
+		ts->irq_enabled = false;
+		nvt_pending_wake = true;
+		pm_wakeup_event(&ts->input_dev->dev, 5000);
+		return IRQ_HANDLED;
+	}
+
 #if WAKEUP_GESTURE
 	if (bTouchIsAwake == 0) {
 		pm_wakeup_event(&ts->input_dev->dev, 5000);
@@ -3098,6 +3110,31 @@ static void nvt_ts_late_resume(struct early_suspend *h)
 }
 #endif
 
+static int nvt_pm_suspend(struct device *dev)
+{
+	nvt_pm_suspended = true;
+	nvt_pending_wake = false;
+	return 0;
+}
+static int nvt_pm_resume(struct device *dev)
+{
+	nvt_pm_suspended = false;
+	if (nvt_pending_wake) {
+		NVT_LOG("Processing deferred deep sleep wake...\n");
+		nvt_pending_wake = false;
+		nvt_ts_work_func(0, ts);
+		if (!ts->irq_enabled) {
+			enable_irq(ts->client->irq);
+			ts->irq_enabled = true;
+		}
+	}
+	return 0;
+}
+static const struct dev_pm_ops nvt_pm_ops = {
+	.suspend = nvt_pm_suspend,
+	.resume  = nvt_pm_resume,
+};
+
 static const struct spi_device_id nvt_ts_id[] = {
 	{ NVT_SPI_NAME, 0 },
 	{ }
@@ -3118,6 +3155,7 @@ static struct spi_driver nvt_spi_driver = {
 	.driver = {
 		.name	= NVT_SPI_NAME,
 		.owner	= THIS_MODULE,
+		.pm	    = &nvt_pm_ops,
 #ifdef CONFIG_OF
 		.of_match_table = nvt_match_table,
 #endif

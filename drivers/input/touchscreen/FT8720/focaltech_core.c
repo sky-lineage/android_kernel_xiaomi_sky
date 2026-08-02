@@ -90,6 +90,9 @@ int32_t g_new_proximity_event_falg;
 int fts_charger_flag;
 int fts_headset_flag;
 
+static bool fts_pm_suspended = false;
+static bool fts_pending_wake = false;
+
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE)
 int enter_palm_mode(struct fts_ts_data *data);
 int fts_palm_sensor_write(int value);
@@ -1057,18 +1060,15 @@ static irqreturn_t fts_irq_handler(int irq, void *data)
 {
     struct fts_ts_data *ts_data = fts_data;
     //struct input_dev *input_dev = ts_data->input_dev;
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
-    int ret = 0;
-    if ((ts_data->suspended) && (ts_data->pm_suspend)) {
-        ret = wait_for_completion_timeout(
-                  &ts_data->pm_completion,
-                  msecs_to_jiffies(FTS_TIMEOUT_COMERR_PM));
-        if (!ret) {
-            FTS_ERROR("Bus don't resume from pm(deep),timeout,skip irq");
-            return IRQ_HANDLED;
-        }
+
+    if (fts_pm_suspended) {
+        FTS_INFO("Deep sleep IRQ deferred to PM resume.\n");
+        fts_irq_disable();
+        fts_pending_wake = true;
+        pm_wakeup_event(&ts_data->input_dev->dev, 5000);
+        return IRQ_HANDLED;
     }
-#endif
+
 /*
 	mutex_lock(&input_dev->mutex);
 
@@ -2109,11 +2109,6 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 	}
 #endif
 
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
-    init_completion(&ts_data->pm_completion);
-    ts_data->pm_suspend = false;
-#endif
-
 #if IS_ENABLED(CONFIG_XIAOMI_PANEL_NOTIFIER)
 		ts_data->xiaomi_panel_notif.notifier_call = fts_xiaomi_panel_notifier_callback;
 		ret = xiaomi_panel_notifier_register_client(&ts_data->xiaomi_panel_notif);
@@ -2435,14 +2430,12 @@ static int fts_ts_resume(struct device *dev)
     return 0;
 }
 
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
 static int fts_pm_suspend(struct device *dev)
 {
-    struct fts_ts_data *ts_data = dev_get_drvdata(dev);
 
     FTS_INFO("system enters into pm_suspend");
-    ts_data->pm_suspend = true;
-    reinit_completion(&ts_data->pm_completion);
+    fts_pm_suspended = true;
+    fts_pending_wake = false;
     return 0;
 }
 
@@ -2451,8 +2444,13 @@ static int fts_pm_resume(struct device *dev)
     struct fts_ts_data *ts_data = dev_get_drvdata(dev);
 
     FTS_INFO("system resumes from pm_suspend");
-    ts_data->pm_suspend = false;
-    complete(&ts_data->pm_completion);
+    fts_pm_suspended = false;
+    if (fts_pending_wake) {
+        FTS_INFO("Processing deferred deep sleep wake...\n");
+        fts_pending_wake = false;
+        fts_irq_handler(0, ts_data);
+        fts_irq_enable();
+    }
     return 0;
 }
 
@@ -2460,7 +2458,6 @@ static const struct dev_pm_ops fts_dev_pm_ops = {
     .suspend = fts_pm_suspend,
     .resume = fts_pm_resume,
 };
-#endif
 
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE)
 
@@ -2794,9 +2791,7 @@ static struct spi_driver fts_ts_driver = {
     .driver = {
         .name = FTS_DRIVER_NAME,
         .owner = THIS_MODULE,
-#if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
         .pm = &fts_dev_pm_ops,
-#endif
         .of_match_table = of_match_ptr(fts_dt_match),
     },
     .id_table = fts_ts_id,
